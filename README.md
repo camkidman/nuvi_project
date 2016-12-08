@@ -31,3 +31,7 @@ There are a few different ways we could change this, depending on the requiremen
 1. The saved "urls" redis set can be deleted between each run if we're confident the data sets will have entirely different articles-- this will save memory on the redis server
 2. The logging device could stand to be something other than `STDOUT`
 3. I'm not too familiar with redis passwords and auth, so I'm sure there can be more done in the validation section
+
+### Follow-up
+
+I'd be happy to have any feedback on this script, so please let me know if there was something I could've done better!
