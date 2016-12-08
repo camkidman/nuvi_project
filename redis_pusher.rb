@@ -10,12 +10,11 @@ require "logger"
 shortened_url = ARGV[0]
 redis_server = ARGV[1]
 redis_port = ARGV[2]
-redis_username = ARGV[3]
 redis_password = ARGV[4]
 logger = ::Logger.new(STDOUT)
 
 at_exit do
-  "Usage: ruby redis_pusher.rb page_url (required) redis_server (optional) redis_port redis_username redis_password\n"
+  "Usage: ruby redis_pusher.rb page_url (required) redis_server (optional) redis_port (optional) redis_password (optional)\n"
   "By default, the script will use the REDIS_URL from your environment, pass one in if you'd rather connect to a different redis host"
 end
 
@@ -27,28 +26,35 @@ if shortened_url.nil?
   exit
 end
 
-if redis_server.include?(":")
-  return if redis_server.include?("redis://")
-  logger.info("Please pass the redis port in separately from the host as the second argument")
-  exit
+if !redis_server.nil? && redis_server.include?(":")
+  unless redis_server.include?("redis://") || redis_server.include?("http")
+    logger.info("Please pass the redis port in separately from the host as the second argument")
+    exit
+  end
 end
 
 if !redis_server.nil? && !redis_port.nil?
-  redis_credentials = !redis_username.nil? || !redis_password.nil? ? "#{redis_username}:#{redis_password}" : nil
+  redis_server = redis_server.gsub("http://", "")
   if redis_server.include?("redis://")
-    redis = ::Redis.new(:url => redis_server)
+    redis = redis_password.nil? ? ::Redis.new(:url => redis_server) : ::Redis.new(:url => redis_server, :password => redis_password)
   else
-    redis = ::Redis.new(:url => redis_server, :port => redis_port)
+    redis = redis_password.nil? ? ::Redis.new(:host => redis_server, :port => redis_port) : ::Redis.new(:host => redis_server, :port => redis_port, :password => redis_password)
   end
 else
   redis = ::Redis.new
 end
 
+unless redis.connected?
+  logger.error("There was an error connecting to the redis server with the credentials provided. Please check them and try again")
+  exit
+end
+
 agent = ::Mechanize.new
 begin
   source_url = agent.get(shortened_url).uri.to_s
-rescue ::Net::HTTP::Persistent::Error => _exception
+rescue => exception
   logger.error { "URL #{shortened_url} is not available. It's possible the redis host was entered first. If not, please make sure the page loads in a browser" }
+  logger.error { "Details: #{exception.inspect}" }
   exit
 end
 
