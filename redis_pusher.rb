@@ -5,6 +5,7 @@ require "redis"
 require "nokogiri"
 require "open-uri"
 require "mechanize"
+require "logger"
 
 shortened_url = ARGV[0]
 redis_server = ARGV[1]
@@ -16,6 +17,7 @@ agent = ::Mechanize.new
 source_url = agent.get(shortened_url).uri.to_s
 new_item_count = 0
 recurring_item_count = 0
+logger = ::Logger.new(STDOUT)
 
 ## Do validations here. Argument 1 must be present, default the others to localhost and default port
 # Output a "default use" string when no arguments are passed in
@@ -32,15 +34,15 @@ source_page = ::Nokogiri::HTML(open(source_url)) do |config|
 end
 
 zip_links = source_page.css("a").select { |link| link.attribute("href").to_s.include?(".zip") }.map { |node| node.attribute("href").to_s }
-puts "#{zip_links.count} zip files found"
+logger.info("#{zip_links.count} zip files found")
 
 zip_links.each do |zip_link|
   zip_url = URI.join(source_url, zip_link)
-  puts "Downloading file #{zip_link} from #{zip_url}"
+  logger.info("Downloading file #{zip_link} from #{zip_url}")
   begin
     IO.copy_stream(open(zip_url), zip_link)
   rescue ::OpenURI::HTTPError => exception
-    puts "Http error while trying to download file from #{zip_url}:"
+    logger.error("Http error while trying to download file from #{zip_url}:")
     exception.inspect
   end
 
@@ -52,24 +54,22 @@ zip_links.each do |zip_link|
         article_url = noko_xml.xpath("//topic_url/text()").to_s # Get the topic_url as a string
         cleansed_article_url = article_url.gsub(/\?(.*)/, "") # Filter out any reference parameters
         if redis.sismember("urls", cleansed_article_url)
-          puts "The article at this URL has already been stored!"
+          logger.info("The article at URL #{cleansed_article_url} has already been stored!")
           recurring_item_count += 1
           next
         else
           redis.sadd("urls", cleansed_article_url)
           redis.lpush("NEWS_XML", content)
-          puts "Added one element to NEWS_XML redis list"
+          logger.info("Added one element to NEWS_XML redis list")
           new_item_count += 1
         end
       end
     end
   rescue ::Zip::Error => exception
-    puts "Unable to extract zip file #{zip_link}:"
-    exception.inspect
-  ensure
-    ::FileUtils.rm(zip_link)
+    logger.error {"Unable to extract zip file #{zip_link}:\n" + exception.inspect }
   end
+  ::FileUtils.rm(zip_link) if ::File.exists?(zip_link)
 end
-puts "Added #{new_item_count} articles to the NEWS_XML list"
-puts "Skipped #{recurring_item_count} articles"
-puts "Total articles: #{redis.llen("NEWS_XML")}"
+logger.info("Added #{new_item_count} articles to the NEWS_XML list")
+logger.info("Skipped #{recurring_item_count} articles")
+logger.info("Total articles: #{redis.llen("NEWS_XML")}")
