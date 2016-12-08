@@ -31,6 +31,7 @@ There are a few different ways we could change this, depending on the requiremen
 1. The saved "urls" redis set can be deleted between each run if we're confident the data sets will have entirely different articles-- this will save memory on the redis server
 2. The logging device could stand to be something other than `STDOUT`
 3. I'm not too familiar with redis passwords and auth, so I'm sure there can be more done in the validation section
+4. Instead of a ruby script this could've been a rails app for someone to paste the URL into, authentication, etc. We could really get crazy with the cheese-whiz depending on what's needed for the project, but any dev should be able to run this
 
 ### Follow-up
 
