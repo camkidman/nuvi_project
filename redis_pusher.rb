@@ -12,22 +12,48 @@ redis_server = ARGV[1]
 redis_port = ARGV[2]
 redis_username = ARGV[3]
 redis_password = ARGV[4]
-
-agent = ::Mechanize.new
-source_url = agent.get(shortened_url).uri.to_s
-new_item_count = 0
-recurring_item_count = 0
 logger = ::Logger.new(STDOUT)
+
+at_exit do
+  "Usage: ruby redis_pusher.rb page_url (required) redis_server (optional) redis_port redis_username redis_password\n"
+  "By default, the script will use the REDIS_URL from your environment, pass one in if you'd rather connect to a different redis host"
+end
 
 ## Do validations here. Argument 1 must be present, default the others to localhost and default port
 # Output a "default use" string when no arguments are passed in
 #
+if shortened_url.nil?
+  logger.info("You must pass in a URL for zip files to be pulled from!")
+  exit
+end
+
+if redis_server.include?(":")
+  return if redis_server.include?("redis://")
+  logger.info("Please pass the redis port in separately from the host as the second argument")
+  exit
+end
+
 if !redis_server.nil? && !redis_port.nil?
   redis_credentials = !redis_username.nil? || !redis_password.nil? ? "#{redis_username}:#{redis_password}" : nil
-  redis = ::Redis.new(:url => redis_server, :port => redis_port)
+  if redis_server.include?("redis://")
+    redis = ::Redis.new(:url => redis_server)
+  else
+    redis = ::Redis.new(:url => redis_server, :port => redis_port)
+  end
 else
   redis = ::Redis.new
 end
+
+agent = ::Mechanize.new
+begin
+  source_url = agent.get(shortened_url).uri.to_s
+rescue ::Net::HTTP::Persistent::Error => _exception
+  logger.error { "URL #{shortened_url} is not available. It's possible the redis host was entered first. If not, please make sure the page loads in a browser" }
+  exit
+end
+
+new_item_count = 0
+recurring_item_count = 0
 
 source_page = ::Nokogiri::HTML(open(source_url)) do |config|
   config.noblanks
