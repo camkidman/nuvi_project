@@ -1,6 +1,5 @@
 require "rubygems"
 require "zip"
-require "pry"
 require "redis"
 require "nokogiri"
 require "open-uri"
